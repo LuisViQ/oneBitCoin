@@ -28,19 +28,30 @@ npx expo-doctor
 | react-native-web | 0.17.1  | ^0.21.0  |
 
 A biblioteca `react-native-chart-kit` permaneceu na mesma versão pois já era compatível com a nova stack.
+
 O .gitignore foi mudado para evitar que a pasta android/ seja adicionada ao repositório.
 
 Tambem entraram mudancas funcionais no app:
 `App.js`
+
 Migracao da consulta historica para o endpoint `market_chart` da CoinGecko.
+
 Normalizacao das cotacoes para manter 1 registro por dia.
+
 Ajuste do fluxo de atualizacao para reagir a mudanca de `days`.
+
 Limitacao da lista para o periodo selecionado (`7/15/30/90/180`).
+
 `src/components/QuotationsList/index.js`
+
 Refatoracao dos botoes de periodo com `FILTER_BUTTONS`.
+
 Destaque visual do botao ativo selecionado.
+
 Adicao de `keyExtractor` no `FlatList`.
+
 `src/components/QuotationsList/style.js`
+
 Estilos adicionados para o estado ativo dos botoes.
 
 ## Resultado
