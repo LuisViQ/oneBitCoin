@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-import { StyleSheet, Text, View, SafeAreaView, StatusBar } from 'react-native';
+import { StyleSheet, SafeAreaView, StatusBar, Platform } from 'react-native';
 
 import CurrentPrice from './src/components/CurrentPrice';
 import HistoryGraphic from './src/components/HistoryGraphic';
@@ -14,92 +14,100 @@ function convertDate(date) {
   return `${date.getFullYear()}-${addZero(date.getMonth() + 1)}-${addZero(date.getDate())}`;
 }
 
+
 function url(qtdDays) {
-  const date = new Date();
-  const listLastDays = qtdDays;
-  const endDate = convertDate(date);
-  date.setDate(date.getDate() - listLastDays);
-  const startDate = convertDate(date);
-
-  return `https://api.coindesk.com/v1/bpi/historical/close.json?start=${startDate}&end=${endDate}`;
+  return `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${qtdDays}`;
 }
 
-async function getListCoins(url) {
-  let response = await fetch(url);
+function normalizeDailyPrices(prices) {
+  const pricesByDay = new Map();
+
+  prices.forEach((item) => {
+    const date = new Date(item[0]);
+    const dayKey = convertDate(date);
+
+    pricesByDay.set(dayKey, { timestamp: item[0], value: item[1] });
+  });
+
+  return Array.from(pricesByDay.values()).sort((a, b) => a.timestamp - b.timestamp);
+}
+
+async function getMarketChartData(apiUrl) {
+  let response = await fetch(apiUrl);
   let returnApi = await response.json();
 
-
-  if(returnApi.bpi) {
-    let selectListQuotations = returnApi.bpi;
-  
-    const queryCoinsList = Object.keys(selectListQuotations).map((key) => {
-      return {
-        date: key.split("-").reverse().join("/"),
-        value: selectListQuotations[key],
-      }
-    });
-  
-    let data = queryCoinsList.reverse();
-    return data;
+  if(returnApi.prices) {
+    return normalizeDailyPrices(returnApi.prices);
   }
 
   return [];
 }
 
-async function getPriceCoinsGraphic(url) {
-  let response = await fetch(url);
-  let returnApi = await response.json();
+function getQuotationList(prices) {
+  return prices.map((item) => {
+    const date = new Date(item.timestamp);
+    return {
+      date: `${addZero(date.getDate())}/${addZero(date.getMonth()+1)}/${date.getFullYear()}`,
+      value: item.value.toFixed(2),
+    };
+  }).reverse();
+}
 
-  if(returnApi.bpi) {
-    let selectListQuotations = returnApi.bpi;
-    const queryCoinsList = Object.keys(selectListQuotations).map((key) => {return selectListQuotations[key]} );
-  
-    let data = queryCoinsList;
-  
-    return data;
+function getGraphicList(prices) {
+  return prices.map((item) => item.value);
+}
+
+function limitByDays(prices, totalDays) {
+  if(prices.length <= totalDays) {
+    return prices;
   }
 
-  return [];
+  return prices.slice(prices.length - totalDays);
 }
 
 export default function App() {
   const [coinsList, setCoinsList] = useState([]);
   const [coinsGraphicList, setCoinsGraphicList] = useState([0]);
   const [days, setDays] = useState(30);
-  const [updateData, setUpdateData] = useState(true);
-  const [price, setPrice] = useState();
+  const [price, setPrice] = useState("0.0000");
 
   function updateDay(number) {
     setDays(number);
-    setUpdateData(true);
-  }
-
-  function priceCotation() {
-    setPrice(coinsGraphicList.pop());
   }
 
   useEffect(() => {
-    getListCoins(url(days)).then((data) => {
-      setCoinsList(data);
-    });
+    let active = true;
 
-    getPriceCoinsGraphic(url(days)).then((data) => {
-      setCoinsGraphicList(data);
-    });
+    async function loadData() {
+      const marketData = limitByDays(await getMarketChartData(url(days)), days);
+      if(!active) return;
 
-    priceCotation();
-    if(updateData) {
-      setUpdateData(false);
+      setCoinsList(getQuotationList(marketData));
+      setCoinsGraphicList(getGraphicList(marketData));
+
+      if(marketData.length > 0) {
+        setPrice(marketData[marketData.length - 1].value.toFixed(4));
+      } else {
+        setPrice("0.0000");
+      }
     }
 
-  }, [updateData]);
+    loadData();
+
+    return () => {
+      active = false;
+    };
+  }, [days]);
 
   return (
     <SafeAreaView style={styles.container}>
       <CurrentPrice lastCotation={price}  />
       <HistoryGraphic infoDataGraphic={coinsGraphicList} />
-      <QuotationsList filterDay={updateDay} listTransactions={coinsList} />
-
+      <QuotationsList
+        filterDay={updateDay}
+        listTransactions={coinsList}
+        selectedDays={days}
+      />
       <StatusBar
         backgroundColor="#f50d41"
         barStyle="light-content"
@@ -113,6 +121,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
     alignItems: 'center',
-    paddingTop: Platform.OS === "android" ? 40 : 0,
+    paddingTop: Platform.OS === 'android' ?  40 : 0,
   },
 });
